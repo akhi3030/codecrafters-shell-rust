@@ -7,6 +7,10 @@ fn main() {
         let stdin = io::stdin();
         let mut input = String::new();
         stdin.read_line(&mut input).unwrap();
-        println!("{}: command not found", input.trim());
+        let input = input.trim();
+        if input == "exit 0" {
+            break;
+        }
+        println!("{}: command not found", input);
     }
 }
