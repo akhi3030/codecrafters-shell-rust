@@ -57,7 +57,7 @@ fn handle_command(input: &str) -> ContinueExec {
                         println!("{} is a shell builtin", &rest[0]);
                     }
                     Command::Other(_) => {
-                        println!("{} invalid_command", &rest[0]);
+                        println!("{}: not found", &rest[0]);
                     }
                 }
                 ContinueExec::Continue
