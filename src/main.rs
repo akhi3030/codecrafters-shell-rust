@@ -1,5 +1,6 @@
 use std::fs;
 use std::io::{self, ErrorKind, Write};
+use std::process::Command;
 
 fn look_in_path(path: &[String], arg: &str) -> Option<String> {
     for dir in path {
@@ -33,8 +34,14 @@ fn handle_type_command(path: &[String], arg: &str) {
     }
 }
 
-fn handle_other_command(_path: &[String], argv0: String, _argv: &[String]) {
-    println!("{}: command not found", argv0);
+fn handle_other_command(path: &[String], argv0: String, argv: &[String]) {
+    match look_in_path(path, &argv0) {
+        Some(argv0) => {
+            let res = Command::new(argv0).args(argv).output().unwrap();
+            print!("{}", String::from_utf8_lossy(&res.stdout));
+        }
+        None => println!("{}: command not found", argv0),
+    }
 }
 
 enum ContinueExec {
