@@ -1,4 +1,27 @@
+use std::fs;
 use std::io::{self, Write};
+
+fn handle_type_command(path: &[String], arg: &str) {
+    let cmd = parse_command(arg);
+    match cmd {
+        Command::Builtin(_) => {
+            println!("{} is a shell builtin", arg);
+        }
+        Command::Other => {
+            for dir in path {
+                let dir = fs::read_dir(dir).unwrap();
+                for file in dir {
+                    let file = file.unwrap();
+                    if file.file_name().to_str().unwrap() == arg {
+                        println!("{} is {}", arg, file.path().to_str().unwrap());
+                        return;
+                    }
+                }
+            }
+            println!("{}: not found", arg);
+        }
+    }
+}
 
 enum ContinueExec {
     Stop,
@@ -13,7 +36,7 @@ enum Builtin {
 
 enum Command {
     Builtin(Builtin),
-    Other(String),
+    Other,
 }
 
 fn parse_command(command_str: &str) -> Command {
@@ -24,7 +47,7 @@ fn parse_command(command_str: &str) -> Command {
     } else if command_str == "type" {
         Command::Builtin(Builtin::Type)
     } else {
-        Command::Other(command_str.to_string())
+        Command::Other
     }
 }
 
@@ -36,7 +59,7 @@ fn parse_input(input: &str) -> (Command, Vec<String>) {
     (command, rest)
 }
 
-fn handle_command(input: &str) -> ContinueExec {
+fn handle_command(path: &[String], input: &str) -> ContinueExec {
     let (command, rest) = parse_input(input);
     match command {
         Command::Builtin(built_in) => match built_in {
@@ -51,26 +74,23 @@ fn handle_command(input: &str) -> ContinueExec {
             }
             Builtin::Type => {
                 assert_eq!(rest.len(), 1);
-                let cmd = parse_command(&rest[0]);
-                match cmd {
-                    Command::Builtin(_) => {
-                        println!("{} is a shell builtin", &rest[0]);
-                    }
-                    Command::Other(_) => {
-                        println!("{}: not found", &rest[0]);
-                    }
-                }
+                handle_type_command(path, &rest[0]);
                 ContinueExec::Continue
             }
         },
-        Command::Other(cmd) => {
-            println!("{}: command not found", cmd);
+        Command::Other => {
+            println!("{}: command not found", input);
             ContinueExec::Continue
         }
     }
 }
 
 fn main() {
+    let path = std::env::var("PATH")
+        .unwrap_or(String::new())
+        .split(':')
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
     loop {
         print!("$ ");
         io::stdout().flush().unwrap();
@@ -78,7 +98,7 @@ fn main() {
         let mut input = String::new();
         stdin.read_line(&mut input).unwrap();
         let input = input.trim();
-        match handle_command(input) {
+        match handle_command(&path, input) {
             ContinueExec::Continue => (),
             ContinueExec::Stop => break,
         }
