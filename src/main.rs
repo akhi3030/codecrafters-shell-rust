@@ -21,13 +21,19 @@ fn look_in_path(path: &[String], arg: &str) -> Option<String> {
     None
 }
 
-fn handle_cd_command(args: Vec<String>) {
+fn handle_cd_command(mut args: Vec<String>) {
     assert_eq!(args.len(), 1);
-    match std::env::set_current_dir(&args[0]) {
+    let path = args.pop().unwrap();
+    let path = if path == "~" {
+        std::env::var("HOME").unwrap()
+    } else {
+        path
+    };
+    match std::env::set_current_dir(&path) {
         Ok(()) => (),
         Err(err) => match err.kind() {
             ErrorKind::NotFound => {
-                println!("cd: {}: No such file or directory", args[0]);
+                println!("cd: {}: No such file or directory", path);
             }
             _ => unimplemented!(),
         },
