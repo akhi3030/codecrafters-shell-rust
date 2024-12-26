@@ -7,10 +7,20 @@ fn split_string(input: String) -> Vec<String> {
     let mut current = String::new();
     let mut single_quote = false;
     let mut double_quote = false;
+    let mut slash = false;
     for c in input.chars() {
         match (single_quote, double_quote, c) {
             (true, true, _) => unimplemented!(),
             (false, false, c) => {
+                if slash {
+                    current.push(c);
+                    slash = false;
+                    continue;
+                }
+                if c == '\\' {
+                    slash = true;
+                    continue;
+                }
                 if c == '\'' {
                     single_quote = true;
                 } else if c == '"' {
