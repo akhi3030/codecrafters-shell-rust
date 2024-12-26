@@ -21,6 +21,19 @@ fn look_in_path(path: &[String], arg: &str) -> Option<String> {
     None
 }
 
+fn handle_cd_command(args: Vec<String>) {
+    assert_eq!(args.len(), 1);
+    match std::env::set_current_dir(&args[0]) {
+        Ok(()) => (),
+        Err(err) => match err.kind() {
+            ErrorKind::NotFound => {
+                println!("cd: {}: No such file or directory", args[0]);
+            }
+            _ => unimplemented!(),
+        },
+    }
+}
+
 fn handle_pwd_command() {
     println!("{}", std::env::current_dir().unwrap().to_str().unwrap());
 }
@@ -54,6 +67,7 @@ enum ContinueExec {
 }
 
 enum Builtin {
+    Cd,
     Echo,
     Exit,
     Pwd,
@@ -66,7 +80,9 @@ enum MyCmd {
 }
 
 fn parse_command(command_str: &str) -> MyCmd {
-    if command_str == "exit" {
+    if command_str == "cd" {
+        MyCmd::Builtin(Builtin::Cd)
+    } else if command_str == "exit" {
         MyCmd::Builtin(Builtin::Exit)
     } else if command_str == "echo" {
         MyCmd::Builtin(Builtin::Echo)
@@ -91,6 +107,10 @@ fn handle_command(path: &[String], input: &str) -> ContinueExec {
     let (command, rest) = parse_input(input);
     match command {
         MyCmd::Builtin(builtin) => match builtin {
+            Builtin::Cd => {
+                handle_cd_command(rest);
+                ContinueExec::Continue
+            }
             Builtin::Echo => {
                 println!("{}", rest.join(" "));
                 ContinueExec::Continue
