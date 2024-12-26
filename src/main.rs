@@ -5,17 +5,59 @@ enum ContinueExec {
     Continue,
 }
 
-fn handle_command(input: &str) -> ContinueExec {
-    if input == "exit 0" {
-        return ContinueExec::Stop;
-    }
-    if input.starts_with("echo ") {
-        let input = input.strip_prefix("echo ").unwrap();
-        println!("{input}");
+enum Builtin {
+    Echo,
+    Exit,
+    Type,
+}
+
+enum Command {
+    Builtin(Builtin),
+    Other(String),
+}
+
+fn parse_command(command_str: &str) -> Command {
+    if command_str == "exit" {
+        Command::Builtin(Builtin::Exit)
+    } else if command_str == "echo" {
+        Command::Builtin(Builtin::Echo)
+    } else if command_str == "type" {
+        Command::Builtin(Builtin::Type)
     } else {
-        println!("{}: command not found", input);
+        Command::Other(command_str.to_string())
     }
-    ContinueExec::Continue
+}
+
+fn parse_input(input: &str) -> (Command, Vec<String>) {
+    let mut input = input.split_whitespace();
+    let command_str = input.next().unwrap();
+    let command = parse_command(command_str);
+    let rest = input.map(|s| s.to_string()).collect::<Vec<_>>();
+    (command, rest)
+}
+
+fn handle_command(input: &str) -> ContinueExec {
+    let (command, rest) = parse_input(input);
+    match command {
+        Command::Builtin(built_in) => match built_in {
+            Builtin::Echo => {
+                println!("{}", rest.join(" "));
+                ContinueExec::Continue
+            }
+            Builtin::Exit => {
+                assert_eq!(rest.len(), 1);
+                assert_eq!(rest[0], "0");
+                ContinueExec::Stop
+            }
+            Builtin::Type => {
+                unimplemented!()
+            }
+        },
+        Command::Other(cmd) => {
+            println!("{}: command not found", cmd);
+            ContinueExec::Continue
+        }
+    }
 }
 
 fn main() {
