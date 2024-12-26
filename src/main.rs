@@ -5,15 +5,22 @@ use std::process::Command;
 fn split_string(input: String) -> Vec<String> {
     let mut ret = vec![];
     let mut current = String::new();
+    let mut inside_quotes = false;
     for c in input.chars() {
-        if c == ' ' {
-            if current.len() != 0 {
-                ret.push(current);
-                current = String::new();
+        match (inside_quotes, c) {
+            (false, '\'') => {
+                inside_quotes = true;
             }
-            continue;
+            (true, '\'') | (false, ' ') => {
+                if current.len() != 0 {
+                    ret.push(current);
+                    current = String::new();
+                }
+            }
+            (_, c) => {
+                current.push(c);
+            }
         }
-        current.push(c);
     }
     if current.len() != 0 {
         ret.push(current);
