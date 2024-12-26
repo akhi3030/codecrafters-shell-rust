@@ -1,26 +1,40 @@
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, ErrorKind, Write};
+
+fn look_in_path(path: &[String], arg: &str) -> Option<String> {
+    for dir in path {
+        let dir = match fs::read_dir(dir) {
+            Ok(dir) => dir,
+            Err(err) => match err.kind() {
+                ErrorKind::NotFound => continue,
+                _ => unimplemented!(),
+            },
+        };
+        for file in dir {
+            let file = file.unwrap();
+            if file.file_name().to_str().unwrap() == arg {
+                return Some(file.path().to_str().unwrap().to_string());
+            }
+        }
+    }
+    None
+}
 
 fn handle_type_command(path: &[String], arg: &str) {
     let cmd = parse_command(arg);
     match cmd {
-        Command::Builtin(_) => {
+        MyCmd::Builtin(_) => {
             println!("{} is a shell builtin", arg);
         }
-        Command::Other => {
-            for dir in path {
-                let dir = fs::read_dir(dir).unwrap();
-                for file in dir {
-                    let file = file.unwrap();
-                    if file.file_name().to_str().unwrap() == arg {
-                        println!("{} is {}", arg, file.path().to_str().unwrap());
-                        return;
-                    }
-                }
-            }
-            println!("{}: not found", arg);
-        }
+        MyCmd::Other(_) => match look_in_path(path, arg) {
+            Some(res) => println!("{} is {}", arg, res),
+            None => println!("{}: not found", arg),
+        },
     }
+}
+
+fn handle_other_command(_path: &[String], argv0: String, _argv: &[String]) {
+    println!("{}: command not found", argv0);
 }
 
 enum ContinueExec {
@@ -34,24 +48,24 @@ enum Builtin {
     Type,
 }
 
-enum Command {
+enum MyCmd {
     Builtin(Builtin),
-    Other,
+    Other(String),
 }
 
-fn parse_command(command_str: &str) -> Command {
+fn parse_command(command_str: &str) -> MyCmd {
     if command_str == "exit" {
-        Command::Builtin(Builtin::Exit)
+        MyCmd::Builtin(Builtin::Exit)
     } else if command_str == "echo" {
-        Command::Builtin(Builtin::Echo)
+        MyCmd::Builtin(Builtin::Echo)
     } else if command_str == "type" {
-        Command::Builtin(Builtin::Type)
+        MyCmd::Builtin(Builtin::Type)
     } else {
-        Command::Other
+        MyCmd::Other(command_str.to_string())
     }
 }
 
-fn parse_input(input: &str) -> (Command, Vec<String>) {
+fn parse_input(input: &str) -> (MyCmd, Vec<String>) {
     let mut input = input.split_whitespace();
     let command_str = input.next().unwrap();
     let command = parse_command(command_str);
@@ -62,7 +76,7 @@ fn parse_input(input: &str) -> (Command, Vec<String>) {
 fn handle_command(path: &[String], input: &str) -> ContinueExec {
     let (command, rest) = parse_input(input);
     match command {
-        Command::Builtin(built_in) => match built_in {
+        MyCmd::Builtin(built_in) => match built_in {
             Builtin::Echo => {
                 println!("{}", rest.join(" "));
                 ContinueExec::Continue
@@ -78,8 +92,8 @@ fn handle_command(path: &[String], input: &str) -> ContinueExec {
                 ContinueExec::Continue
             }
         },
-        Command::Other => {
-            println!("{}: command not found", input);
+        MyCmd::Other(argv0) => {
+            handle_other_command(path, argv0, &rest);
             ContinueExec::Continue
         }
     }
