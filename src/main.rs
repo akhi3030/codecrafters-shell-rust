@@ -2,6 +2,25 @@ use std::fs;
 use std::io::{self, ErrorKind, Write};
 use std::process::Command;
 
+fn split_string(input: String) -> Vec<String> {
+    let mut ret = vec![];
+    let mut current = String::new();
+    for c in input.chars() {
+        if c == ' ' {
+            if current.len() != 0 {
+                ret.push(current);
+                current = String::new();
+            }
+            continue;
+        }
+        current.push(c);
+    }
+    if current.len() != 0 {
+        ret.push(current);
+    }
+    ret
+}
+
 fn look_in_path(path: &[String], arg: &str) -> Option<String> {
     for dir in path {
         let dir = match fs::read_dir(dir) {
@@ -38,6 +57,10 @@ fn handle_cd_command(mut args: Vec<String>) {
             _ => unimplemented!(),
         },
     }
+}
+
+fn handle_echo_command(args: Vec<String>) {
+    println!("{}", args.join(" "));
 }
 
 fn handle_pwd_command() {
@@ -101,15 +124,15 @@ fn parse_command(command_str: &str) -> MyCmd {
     }
 }
 
-fn parse_input(input: &str) -> (MyCmd, Vec<String>) {
-    let mut input = input.split_whitespace();
-    let command_str = input.next().unwrap();
-    let command = parse_command(command_str);
-    let rest = input.map(|s| s.to_string()).collect::<Vec<_>>();
+fn parse_input(input: String) -> (MyCmd, Vec<String>) {
+    let mut input = split_string(input);
+    let command_str = input.remove(0);
+    let command = parse_command(&command_str);
+    let rest = input.into_iter().map(|s| s.to_string()).collect::<Vec<_>>();
     (command, rest)
 }
 
-fn handle_command(path: &[String], input: &str) -> ContinueExec {
+fn handle_command(path: &[String], input: String) -> ContinueExec {
     let (command, rest) = parse_input(input);
     match command {
         MyCmd::Builtin(builtin) => match builtin {
@@ -118,7 +141,7 @@ fn handle_command(path: &[String], input: &str) -> ContinueExec {
                 ContinueExec::Continue
             }
             Builtin::Echo => {
-                println!("{}", rest.join(" "));
+                handle_echo_command(rest);
                 ContinueExec::Continue
             }
             Builtin::Exit => {
@@ -155,7 +178,7 @@ fn main() {
         let stdin = io::stdin();
         let mut input = String::new();
         stdin.read_line(&mut input).unwrap();
-        let input = input.trim();
+        let input = input.trim().to_string();
         match handle_command(&path, input) {
             ContinueExec::Continue => (),
             ContinueExec::Stop => break,
