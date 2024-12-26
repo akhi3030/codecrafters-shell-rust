@@ -50,7 +50,17 @@ fn handle_command(input: &str) -> ContinueExec {
                 ContinueExec::Stop
             }
             Builtin::Type => {
-                unimplemented!()
+                assert_eq!(rest.len(), 1);
+                let cmd = parse_command(&rest[0]);
+                match cmd {
+                    Command::Builtin(_) => {
+                        println!("{} is a shell builtin", &rest[0]);
+                    }
+                    Command::Other(_) => {
+                        println!("{} invalid_command", &rest[0]);
+                    }
+                }
+                ContinueExec::Continue
             }
         },
         Command::Other(cmd) => {
