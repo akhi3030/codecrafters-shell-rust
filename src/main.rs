@@ -21,6 +21,10 @@ fn look_in_path(path: &[String], arg: &str) -> Option<String> {
     None
 }
 
+fn handle_pwd_command() {
+    println!("{}", std::env::current_dir().unwrap().to_str().unwrap());
+}
+
 fn handle_type_command(path: &[String], arg: &str) {
     let cmd = parse_command(arg);
     match cmd {
@@ -52,6 +56,7 @@ enum ContinueExec {
 enum Builtin {
     Echo,
     Exit,
+    Pwd,
     Type,
 }
 
@@ -65,6 +70,8 @@ fn parse_command(command_str: &str) -> MyCmd {
         MyCmd::Builtin(Builtin::Exit)
     } else if command_str == "echo" {
         MyCmd::Builtin(Builtin::Echo)
+    } else if command_str == "pwd" {
+        MyCmd::Builtin(Builtin::Pwd)
     } else if command_str == "type" {
         MyCmd::Builtin(Builtin::Type)
     } else {
@@ -83,7 +90,7 @@ fn parse_input(input: &str) -> (MyCmd, Vec<String>) {
 fn handle_command(path: &[String], input: &str) -> ContinueExec {
     let (command, rest) = parse_input(input);
     match command {
-        MyCmd::Builtin(built_in) => match built_in {
+        MyCmd::Builtin(builtin) => match builtin {
             Builtin::Echo => {
                 println!("{}", rest.join(" "));
                 ContinueExec::Continue
@@ -92,6 +99,10 @@ fn handle_command(path: &[String], input: &str) -> ContinueExec {
                 assert_eq!(rest.len(), 1);
                 assert_eq!(rest[0], "0");
                 ContinueExec::Stop
+            }
+            Builtin::Pwd => {
+                handle_pwd_command();
+                ContinueExec::Continue
             }
             Builtin::Type => {
                 assert_eq!(rest.len(), 1);
