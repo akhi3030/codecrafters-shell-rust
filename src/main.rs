@@ -1,4 +1,4 @@
-use std::fs;
+use std::fs::{self, File};
 use std::io::{self, ErrorKind, Write};
 use std::process::Command;
 
@@ -94,7 +94,7 @@ fn look_in_path(path: &[String], arg: &str) -> Option<String> {
     None
 }
 
-fn handle_cd_command(mut stderr: impl io::Write, mut args: Vec<String>) {
+fn handle_cd_command(mut stderr: Box<dyn io::Write>, mut args: Vec<String>) {
     assert_eq!(args.len(), 1);
     let path = args.pop().unwrap();
     let path = if path == "~" {
@@ -113,11 +113,11 @@ fn handle_cd_command(mut stderr: impl io::Write, mut args: Vec<String>) {
     }
 }
 
-fn handle_echo_command(mut stdout: impl io::Write, args: Vec<String>) {
+fn handle_echo_command(mut stdout: Box<dyn io::Write>, args: Vec<String>) {
     writeln!(stdout, "{}", args.join(" ")).unwrap();
 }
 
-fn handle_pwd_command(mut stdout: impl io::Write) {
+fn handle_pwd_command(mut stdout: Box<dyn io::Write>) {
     writeln!(
         stdout,
         "{}",
@@ -127,8 +127,8 @@ fn handle_pwd_command(mut stdout: impl io::Write) {
 }
 
 fn handle_type_command(
-    mut stdout: impl io::Write,
-    mut stderr: impl io::Write,
+    mut stdout: Box<dyn io::Write>,
+    mut stderr: Box<dyn io::Write>,
     path: &[String],
     arg: &str,
 ) {
@@ -145,8 +145,8 @@ fn handle_type_command(
 }
 
 fn handle_other_command(
-    mut stdout: impl io::Write,
-    mut stderr: impl io::Write,
+    mut stdout: Box<dyn io::Write>,
+    mut stderr: Box<dyn io::Write>,
     path: &[String],
     argv0: String,
     argv: &[String],
@@ -154,8 +154,10 @@ fn handle_other_command(
     match look_in_path(path, &argv0) {
         Some(argv0) => {
             let res = Command::new(argv0).args(argv).output().unwrap();
-            write!(stdout, "{}", String::from_utf8_lossy(&res.stdout)).unwrap();
-            write!(stderr, "{}", String::from_utf8_lossy(&res.stderr)).unwrap();
+            let out = String::from_utf8_lossy(&res.stdout);
+            let err = String::from_utf8_lossy(&res.stderr);
+            write!(stdout, "{}", out).unwrap();
+            write!(stderr, "{}", err).unwrap();
         }
         None => writeln!(stdout, "{}: command not found", argv0).unwrap(),
     }
@@ -195,11 +197,37 @@ fn parse_command(command_str: &str) -> MyCmd {
     }
 }
 
-fn setup_output(input: Vec<String>) -> (impl io::Write, impl io::Write, Vec<String>) {
-    (io::stdout(), io::stderr(), input)
+fn setup_output(input: Vec<String>) -> (Box<dyn io::Write>, Box<dyn io::Write>, Vec<String>) {
+    let mut stdout: Box<dyn io::Write> = Box::new(io::stdout());
+    let mut stderr: Box<dyn io::Write> = Box::new(io::stderr());
+    let mut ret = vec![];
+    let mut change_stdout = false;
+    let mut change_stderr = false;
+    for item in input {
+        if change_stdout {
+            stdout = Box::new(File::create(item).unwrap());
+            change_stdout = false;
+            continue;
+        }
+        if change_stderr {
+            stderr = Box::new(File::create(item).unwrap());
+            change_stderr = false;
+            continue;
+        }
+        if item == ">" || item == "1>" {
+            change_stdout = true;
+            continue;
+        }
+        if item == "2>" {
+            change_stderr = true;
+            continue;
+        }
+        ret.push(item);
+    }
+    (stdout, stderr, ret)
 }
 
-fn parse_input(input: String) -> (impl io::Write, impl io::Write, MyCmd, Vec<String>) {
+fn parse_input(input: String) -> (Box<dyn io::Write>, Box<dyn io::Write>, MyCmd, Vec<String>) {
     let input = split_string(input);
     let (stdout, stderr, mut input) = setup_output(input);
     let command_str = input.remove(0);
