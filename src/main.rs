@@ -23,39 +23,49 @@ fn split_string(input: String) -> Vec<String> {
                 }
                 if c == '\'' {
                     single_quote = true;
-                } else if c == '"' {
+                    continue;
+                }
+                if c == '"' {
                     double_quote = true;
-                } else if c == ' ' {
+                    continue;
+                }
+                if c == ' ' {
                     if current.len() != 0 {
                         ret.push(current);
                         current = String::new();
                     }
-                } else {
-                    current.push(c);
+                    continue;
                 }
+                current.push(c);
             }
 
             (true, false, c) => {
                 if c == '\'' {
                     single_quote = false;
-                    if current.len() != 0 {
-                        ret.push(current);
-                        current = String::new();
-                    }
-                } else {
-                    current.push(c);
+                    continue;
                 }
+                current.push(c);
             }
             (false, true, c) => {
+                if slash {
+                    if c == '\\' || c == '$' || c == '"' {
+                        current.push(c);
+                    } else {
+                        current.push('\\');
+                        current.push(c);
+                    }
+                    slash = false;
+                    continue;
+                }
+                if c == '\\' {
+                    slash = true;
+                    continue;
+                }
                 if c == '"' {
                     double_quote = false;
-                    if current.len() != 0 {
-                        ret.push(current);
-                        current = String::new();
-                    }
-                } else {
-                    current.push(c);
+                    continue;
                 }
+                current.push(c);
             }
         }
     }
