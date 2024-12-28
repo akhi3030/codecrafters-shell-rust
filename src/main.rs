@@ -94,7 +94,7 @@ fn look_in_path(path: &[String], arg: &str) -> Option<String> {
     None
 }
 
-fn handle_cd_command(mut args: Vec<String>) {
+fn handle_cd_command(mut stderr: impl io::Write, mut args: Vec<String>) {
     assert_eq!(args.len(), 1);
     let path = args.pop().unwrap();
     let path = if path == "~" {
@@ -106,41 +106,58 @@ fn handle_cd_command(mut args: Vec<String>) {
         Ok(()) => (),
         Err(err) => match err.kind() {
             ErrorKind::NotFound => {
-                println!("cd: {}: No such file or directory", path);
+                writeln!(stderr, "cd: {}: No such file or directory", path).unwrap();
             }
             _ => unimplemented!(),
         },
     }
 }
 
-fn handle_echo_command(args: Vec<String>) {
-    println!("{}", args.join(" "));
+fn handle_echo_command(mut stdout: impl io::Write, args: Vec<String>) {
+    writeln!(stdout, "{}", args.join(" ")).unwrap();
 }
 
-fn handle_pwd_command() {
-    println!("{}", std::env::current_dir().unwrap().to_str().unwrap());
+fn handle_pwd_command(mut stdout: impl io::Write) {
+    writeln!(
+        stdout,
+        "{}",
+        std::env::current_dir().unwrap().to_str().unwrap()
+    )
+    .unwrap();
 }
 
-fn handle_type_command(path: &[String], arg: &str) {
+fn handle_type_command(
+    mut stdout: impl io::Write,
+    mut stderr: impl io::Write,
+    path: &[String],
+    arg: &str,
+) {
     let cmd = parse_command(arg);
     match cmd {
         MyCmd::Builtin(_) => {
-            println!("{} is a shell builtin", arg);
+            writeln!(stdout, "{} is a shell builtin", arg).unwrap();
         }
         MyCmd::Other(_) => match look_in_path(path, arg) {
-            Some(res) => println!("{} is {}", arg, res),
-            None => println!("{}: not found", arg),
+            Some(res) => writeln!(stdout, "{} is {}", arg, res).unwrap(),
+            None => writeln!(stderr, "{}: not found", arg).unwrap(),
         },
     }
 }
 
-fn handle_other_command(path: &[String], argv0: String, argv: &[String]) {
+fn handle_other_command(
+    mut stdout: impl io::Write,
+    mut stderr: impl io::Write,
+    path: &[String],
+    argv0: String,
+    argv: &[String],
+) {
     match look_in_path(path, &argv0) {
         Some(argv0) => {
             let res = Command::new(argv0).args(argv).output().unwrap();
-            print!("{}", String::from_utf8_lossy(&res.stdout));
+            write!(stdout, "{}", String::from_utf8_lossy(&res.stdout)).unwrap();
+            write!(stderr, "{}", String::from_utf8_lossy(&res.stderr)).unwrap();
         }
-        None => println!("{}: command not found", argv0),
+        None => writeln!(stdout, "{}: command not found", argv0).unwrap(),
     }
 }
 
@@ -178,24 +195,29 @@ fn parse_command(command_str: &str) -> MyCmd {
     }
 }
 
-fn parse_input(input: String) -> (MyCmd, Vec<String>) {
-    let mut input = split_string(input);
+fn setup_output(input: Vec<String>) -> (impl io::Write, impl io::Write, Vec<String>) {
+    (io::stdout(), io::stderr(), input)
+}
+
+fn parse_input(input: String) -> (impl io::Write, impl io::Write, MyCmd, Vec<String>) {
+    let input = split_string(input);
+    let (stdout, stderr, mut input) = setup_output(input);
     let command_str = input.remove(0);
     let command = parse_command(&command_str);
     let rest = input.into_iter().map(|s| s.to_string()).collect::<Vec<_>>();
-    (command, rest)
+    (stdout, stderr, command, rest)
 }
 
 fn handle_command(path: &[String], input: String) -> ContinueExec {
-    let (command, rest) = parse_input(input);
+    let (stdout, stderr, command, rest) = parse_input(input);
     match command {
         MyCmd::Builtin(builtin) => match builtin {
             Builtin::Cd => {
-                handle_cd_command(rest);
+                handle_cd_command(stderr, rest);
                 ContinueExec::Continue
             }
             Builtin::Echo => {
-                handle_echo_command(rest);
+                handle_echo_command(stdout, rest);
                 ContinueExec::Continue
             }
             Builtin::Exit => {
@@ -204,17 +226,17 @@ fn handle_command(path: &[String], input: String) -> ContinueExec {
                 ContinueExec::Stop
             }
             Builtin::Pwd => {
-                handle_pwd_command();
+                handle_pwd_command(stdout);
                 ContinueExec::Continue
             }
             Builtin::Type => {
                 assert_eq!(rest.len(), 1);
-                handle_type_command(path, &rest[0]);
+                handle_type_command(stdout, stderr, path, &rest[0]);
                 ContinueExec::Continue
             }
         },
         MyCmd::Other(argv0) => {
-            handle_other_command(path, argv0, &rest);
+            handle_other_command(stdout, stderr, path, argv0, &rest);
             ContinueExec::Continue
         }
     }
