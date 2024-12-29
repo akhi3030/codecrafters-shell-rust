@@ -1,4 +1,4 @@
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::io::{self, ErrorKind, Write};
 use std::process::Command;
 
@@ -205,29 +205,66 @@ fn parse_command(command_str: &str) -> MyCmd {
     }
 }
 
+enum ChangeStdIo {
+    No,
+    Create,
+    Append,
+}
+
+fn handle_change_stdio(
+    change_stdio: &mut ChangeStdIo,
+    item: &str,
+    stream: &mut Box<dyn io::Write>,
+) -> bool {
+    match change_stdio {
+        ChangeStdIo::No => false,
+        ChangeStdIo::Create => {
+            *stream = Box::new(File::create(item).unwrap());
+            *change_stdio = ChangeStdIo::No;
+            true
+        }
+        ChangeStdIo::Append => {
+            *stream = Box::new(
+                OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .append(true)
+                    .open(item)
+                    .unwrap(),
+            );
+            *change_stdio = ChangeStdIo::No;
+            true
+        }
+    }
+}
+
 fn setup_output(input: Vec<String>) -> (Box<dyn io::Write>, Box<dyn io::Write>, Vec<String>) {
     let mut stdout: Box<dyn io::Write> = Box::new(io::stdout());
     let mut stderr: Box<dyn io::Write> = Box::new(io::stderr());
     let mut ret = vec![];
-    let mut change_stdout = false;
-    let mut change_stderr = false;
+    let mut change_stdout = ChangeStdIo::No;
+    let mut change_stderr = ChangeStdIo::No;
     for item in input {
-        if change_stdout {
-            stdout = Box::new(File::create(item).unwrap());
-            change_stdout = false;
+        if handle_change_stdio(&mut change_stdout, &item, &mut stdout) {
             continue;
         }
-        if change_stderr {
-            stderr = Box::new(File::create(item).unwrap());
-            change_stderr = false;
+        if handle_change_stdio(&mut change_stderr, &item, &mut stderr) {
             continue;
         }
         if item == ">" || item == "1>" {
-            change_stdout = true;
+            change_stdout = ChangeStdIo::Create;
+            continue;
+        }
+        if item == ">>" || item == "1>>" {
+            change_stdout = ChangeStdIo::Append;
             continue;
         }
         if item == "2>" {
-            change_stderr = true;
+            change_stderr = ChangeStdIo::Create;
+            continue;
+        }
+        if item == "2>>" {
+            change_stderr = ChangeStdIo::Append;
             continue;
         }
         ret.push(item);
