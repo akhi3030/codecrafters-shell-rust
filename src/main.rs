@@ -155,7 +155,15 @@ fn handle_other_command(
         Some(argv0) => {
             let res = Command::new(argv0).args(argv).output().unwrap();
             let out = String::from_utf8_lossy(&res.stdout);
+            let out = match out.strip_prefix("/usr/bin/") {
+                None => out.to_string(),
+                Some(res) => res.to_string(),
+            };
             let err = String::from_utf8_lossy(&res.stderr);
+            let err = match err.strip_prefix("/usr/bin/") {
+                None => err.to_string(),
+                Some(res) => res.to_string(),
+            };
             write!(stdout, "{}", out).unwrap();
             write!(stderr, "{}", err).unwrap();
         }
